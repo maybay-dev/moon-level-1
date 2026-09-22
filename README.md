@@ -92,7 +92,7 @@ npm run build        # TypeScript build for all workspaces
 npm run test         # runs the full Vitest suite against the REAL compiled circuits
 ```
 
-The test suite (60+ cases) covers:
+The test suite (**48 cases**) covers:
 
 - **Core functionality** — open/vote/change/close lifecycle, tallies, totals
 - **Valid inputs** — every option boundary, repeat voting by different pseudonyms
@@ -101,7 +101,7 @@ The test suite (60+ cases) covers:
 - **Edge cases** — re-opening a used contract, changing to the same option, tally invariants under churn
 - **Failures & security** — double-vote prevention, voting on closed/unopened polls, ballot pseudonym binding, state-machine transitions
 
-Tests execute the **actual compiled contract** (`contract/managed/whisper-poll`) through `@midnight-ntwrk/compact-runtime`, not a re-implementation — asserting the same ZK circuit logic that runs on-chain.
+Tests execute the **actual compiled contract** (`contract/src/managed/whisper-poll`) through `@midnight-ntwrk/compact-runtime`, not a re-implementation — asserting the same ZK circuit logic that runs on-chain. A captured run transcript is in [`docs/evidence/test-proof.txt`](docs/evidence/test-proof.txt).
 
 ## Deploy
 
@@ -120,11 +120,24 @@ npm run deploy:preprod
 
 The script will:
 
-1. Build a wallet from `DEPLOY_SEED` (never logged, never committed),
-2. Request test tokens from the network faucet (Preview/Preprod only),
+1. Build a wallet from `DEPLOY_SEED` (never logged in full, never committed),
+2. Print your unshielded address and, if the wallet is unfunded, wait while you request test tokens from the human faucet (see [Faucet funding](#faucet-funding-human-in-the-loop)) (Preview/Preprod only),
 3. Register NIGHT for **DUST** generation (the fee resource),
 4. Prove + submit the deploy transaction via the proof server,
 5. Write a **deployment receipt** to `deploy/deployments/<network>-<timestamp>.json` with the contract address, transaction hash, and endpoints.
+
+### Faucet funding (human-in-the-loop)
+
+The Midnight testnet faucets intentionally require a browser (Cloudflare Turnstile captcha) — see [`docs/evidence/deploy-proof.txt`](docs/evidence/deploy-proof.txt) for the API evidence. The deploy script therefore prints the address to fund and waits:
+
+```
+Unshielded address (fund this): mn_addr_preview1…
+👉 Open the faucet, paste the address above, and request tokens:
+   https://faucet.preview.midnight.network
+Waiting up to 20 minute(s) for funds…
+```
+
+Once tokens arrive, deployment resumes automatically (DUST registration → proving → submission → receipt). The wallet seed persists in `deploy/.seeds/` (git-ignored), so you can re-run later without losing funds.
 
 Then interact with the deployed poll:
 
@@ -142,6 +155,41 @@ The authoritative record of live deployments lives in [`deploy/deployments/`](de
 ```bash
 npx tsx deploy/scripts/interact.ts --network <network> --contract <address> --action tally
 ```
+
+## Verification evidence
+
+Captured, reproducible transcripts of every claim in this README live in [`docs/evidence/`](docs/evidence/):
+
+| File | What it proves |
+|------|----------------|
+| [`compile-proof.txt`](docs/evidence/compile-proof.txt) | `compact compile 0.31.1` compiling 4 circuits; full artifact list; byte-identical clean-room re-compile |
+| [`test-proof.txt`](docs/evidence/test-proof.txt) | all 48 test cases passing, per-test verbose listing |
+| [`deploy-proof.txt`](docs/evidence/deploy-proof.txt) | live proof-server startup, wallet creation, address funding flow, faucet-captcha API evidence, deployment continuation steps |
+
+Re-verify everything yourself with the acceptance audit (this re-compiles, re-tests, re-checks secrets hygiene, git history, docs and endpoints from scratch):
+
+```bash
+npm run audit          # bash scripts/audit.sh — exits non-zero on any failure
+```
+
+## Public state vs. private witness (how WhisperPoll uses Midnight)
+
+Midnight contracts separate two kinds of data, and the compiler **enforces** the boundary:
+
+| | Public ledger state | Private witness data |
+|---|---|---|
+| **Where it lives** | On-chain, visible to everyone via the indexer | On the user's machine (private state + ZK witness) |
+| **In WhisperPoll** | `status`, `title`, `optionCount`, `ballots`, `tallies`, `totalVotes`, `adminHash` | the voter's/admin's 32-byte `secretKey` (via the `localSecretKey` witness) |
+| **Who can read it** | Anyone | Only the owner |
+| **Disclosed on-chain as** | — | only a `persistentHash` *pseudonym* or *commitment* |
+
+- **Public state** is everything observers need to verify an election: the poll question, how many options exist, each pseudonymous ballot, the per-option tallies, and the total vote count. Anyone can recompute the tallies from `ballots` and check them against `tallies` — verification requires no trust in the admin.
+- **The witness** (`localSecretKey`) is resolved on the voter's machine when a circuit runs. It is the *pre-image* of two domain-separated hashes:
+  - `voterPseudonym(sk) = persistentHash("whisperpoll:pseudonym:", sk)` — the key under which the ballot is stored. On-chain, this is just an opaque 32-byte value; nobody can derive `sk` from it or link it to a wallet address.
+  - `adminCommitment(sk) = persistentHash("whisperpoll:admin:", sk)` — stored at `openPoll` time; `closePoll` proves in-circuit that the caller knows the pre-image.
+- **The compiler enforces non-disclosure.** Any flow of witness-derived data into a public ledger operation must be wrapped in an explicit `disclose()`. In WhisperPoll, `disclose()` appears exactly where we intend the (already one-way hashed) pseudonym/commitment to become public — and nowhere else. A feature that privately tested membership of a witness-derived key in a *public* map was rejected by the compiler's disclosure analysis and removed (see the note in `whisper-poll.compact`), which is the correct behavior.
+
+So: **tallies are public and independently checkable; identity is private and never leaves the voter's machine.**
 
 ## Security model & trust assumptions
 
@@ -162,7 +210,9 @@ npx tsx deploy/scripts/interact.ts --network <network> --contract <address> --ac
 | `connect ECONNREFUSED 127.0.0.1:6300` during deploy | Start the proof server: `docker compose -f deploy/compose.proof-server.yml up -d` |
 | Deployment stuck at "waiting for funds" | Faucet may be slow; check the receipt address on the network explorer, retry `deploy` (it reuses the same seed) |
 | `DUST: 0` / deploy fails with fee errors | Wait for DUST generation to confirm (a few minutes), or re-run the deploy script |
-| npm version conflicts on `@midnight-ntwrk/*` | Delete `node_modules` + lockfiles and `npm install` fresh; all Midnight packages are pinned to a compatible set |
+| `JavaScript heap out of memory` during wallet sync | Prefix with `NODE_OPTIONS=--max-old-space-size=8192` (wallet sync is memory-heavy) |
+| Faucet returns `Captcha verification failed` via curl | Expected — the faucet requires a browser captcha. Fund via <https://faucet.preview.midnight.network> in a browser, then re-run `npm run deploy:preview` |
+| npm version conflicts on `@midnight-ntwrk/*` | Delete `node_modules` + lockfiles and `npm install` fresh; all Midnight packages are pinned to a compatible set (incl. the `ledger-v8` dedup override) |
 
 ## License
 

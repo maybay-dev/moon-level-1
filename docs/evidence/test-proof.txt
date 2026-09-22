@@ -1,0 +1,65 @@
+================================================================================
+WHISPERPOLL — TEST SUITE PROOF
+Captured: 2026-09-22 · Tool: Vitest 4.1.11 · Runtime: @midnight-ntwrk/compact-runtime 0.16.0
+The suite drives the REAL compiled circuits in contract/src/managed/whisper-poll —
+no mocks, no re-implementations.
+================================================================================
+
+$ npm test
+
+ ✓ test/whisper-poll.test.ts (48 tests) 2429ms
+
+ Test Files  1 passed (1)
+      Tests  48 passed (48)
+
+--------------------------------------------------------------------------------
+Full case list (npm run test -- --reporter=verbose):
+
+ ✓ test/whisper-poll.test.ts > constructor / initial state > starts in PENDING with zeroed public state 81ms
+ ✓ test/whisper-poll.test.ts > constructor / initial state > stores the secret key as private state (witness round-trip) 35ms
+ ✓ test/whisper-poll.test.ts > constructor / initial state > initializes deterministically for the same key 135ms
+ ✓ test/whisper-poll.test.ts > openPoll > opens a poll and binds the opener as admin 42ms
+ ✓ test/whisper-poll.test.ts > openPoll > accepts the minimum option count (2) 27ms
+ ✓ test/whisper-poll.test.ts > openPoll > accepts the maximum option count (4) 42ms
+ ✓ test/whisper-poll.test.ts > openPoll > rejects one option 31ms
+ ✓ test/whisper-poll.test.ts > openPoll > rejects five options 28ms
+ ✓ test/whisper-poll.test.ts > openPoll > rejects zero options 26ms
+ ✓ test/whisper-poll.test.ts > openPoll > rejects re-opening an already-initialized contract 33ms
+ ✓ test/whisper-poll.test.ts > openPoll > cannot be re-opened even by a different user
+ ✓ test/whisper-poll.test.ts > vote > records a ballot and increments the tally and total
+ ✓ test/whisper-poll.test.ts > vote > accepts every valid option index in range
+ ✓ test/whisper-poll.test.ts > vote > rejects an out-of-range option (== optionCount)
+ ✓ test/whisper-poll.test.ts > vote > rejects a far out-of-range option
+ ✓ test/whisper-poll.test.ts > vote > rejects double voting by the same voter
+ ✓ test/whisper-poll.test.ts > vote > rejects double voting even with the same option
+ ✓ test/whisper-poll.test.ts > vote > rejects voting while the poll is PENDING
+ ✓ test/whisper-poll.test.ts > vote > rejects voting after the poll is CLOSED
+ ✓ test/whisper-poll.test.ts > vote > keeps tallies and totalVotes untouched after a rejected vote
+ ✓ test/whisper-poll.test.ts > vote > distinguishes voters by pseudonym, not by key bytes
+ ✓ test/whisper-poll.test.ts > changeVote > moves the ballot and updates tallies atomically
+ ✓ test/whisper-poll.test.ts > changeVote > changing to the same option is a no-op for tallies
+ ✓ test/whisper-poll.test.ts > changeVote > handles the full transition matrix without tally drift
+ ✓ test/whisper-poll.test.ts > changeVote > keeps totalVotes constant across many voters changing votes
+ ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote when none was cast
+ ✓ test/whisper-poll.test.ts > changeVote > rejects an out-of-range new option
+ ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote after close
+ ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote before the poll opens
+ ✓ test/whisper-poll.test.ts > closePoll / permissions > admin can close and the state is terminal
+ ✓ test/whisper-poll.test.ts > closePoll / permissions > a non-admin cannot close the poll
+ ✓ test/whisper-poll.test.ts > closePoll / permissions > a non-admin cannot close even after voting
+ ✓ test/whisper-poll.test.ts > closePoll / permissions > rejects closing a PENDING poll
+ ✓ test/whisper-poll.test.ts > closePoll / permissions > rejects closing an already CLOSED poll
+ ✓ test/whisper-poll.test.ts > closePoll / permissions > closing is irreversible — no circuit can reopen
+ ✓ test/whisper-poll.test.ts > pure circuits (commitments) > voterPseudonym is deterministic and key-specific
+ ✓ test/whisper-poll.test.ts > pure circuits (commitments) > adminCommitment differs from voterPseudonym (domain separation)
+ ✓ test/whisper-poll.test.ts > pure circuits (commitments) > storing the admin commitment does not reveal the secret key
+ ✓ test/whisper-poll.test.ts > security scenarios > ballot is bound to the pseudonym — another key cannot alter it
+ ✓ test/whisper-poll.test.ts > security scenarios > tally integrity: sum of tallies always equals totalVotes
+ ✓ test/whisper-poll.test.ts > security scenarios > state machine refuses every illegal transition
+ ✓ test/whisper-poll.test.ts > security scenarios > two voters with colliding fill-bytes keys are still distinct
+ ✓ test/whisper-poll.test.ts > security scenarios > witness secret key never leaks into public ledger state
+ ✓ test/whisper-poll.test.ts > edge cases > empty-title poll is accepted
+ ✓ test/whisper-poll.test.ts > edge cases > unicode title round-trips through the circuit
+ ✓ test/whisper-poll.test.ts > edge cases > long title (128 chars) round-trips
+ ✓ test/whisper-poll.test.ts > edge cases > maximum Uint<8> option in a 4-option poll is rejected
+ ✓ test/whisper-poll.test.ts > edge cases > fresh simulator instances are isolated

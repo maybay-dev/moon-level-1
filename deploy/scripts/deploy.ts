@@ -45,7 +45,39 @@ import {
   type NetworkName,
 } from './config.js';
 
-const log: Logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
+const baseLog: Logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
+
+/**
+ * Wrap a logger so the wallet seed never reaches the console — including from
+ * third-party code (the wallet SDK logs the master seed at info level).
+ * Redaction is exact-match on the known seed value; other 64-hex values
+ * (contract addresses, tx hashes) pass through untouched.
+ */
+function redactingLogger(base: Logger, secrets: string[]): Logger {
+  const scrub = (msg: unknown): unknown => {
+    if (typeof msg === 'string') {
+      let out = msg;
+      for (const s of secrets) {
+        if (s && out.includes(s)) out = out.split(s).join(`${s.slice(0, 4)}…${s.slice(-4)}[REDACTED]`);
+      }
+      return out;
+    }
+    return msg;
+  };
+  const wrap =
+    (fn: (...a: unknown[]) => void) =>
+    (...a: unknown[]) =>
+      fn(...a.map(scrub));
+  return {
+    ...base,
+    info: wrap(base.info.bind(base)),
+    warn: wrap(base.warn.bind(base)),
+    error: wrap(base.error.bind(base)),
+    debug: wrap(base.debug.bind(base)),
+    trace: wrap(base.trace.bind(base)),
+    fatal: wrap(base.fatal.bind(base)),
+  } as Logger;
+}
 
 const randomSecretKey = (): Uint8Array => crypto.getRandomValues(new Uint8Array(32));
 
@@ -64,12 +96,13 @@ async function main(): Promise<void> {
 
   const env = envConfiguration(network);
   await checkProofServer(env.proofServer);
-  log.info(`Network: ${network} — proof server at ${env.proofServer}`);
+  baseLog.info(`Network: ${network} — proof server at ${env.proofServer}`);
 
   const proofServerContainer = new StaticProofServerContainer(6300);
 
   // 1-2. Wallet from persisted/env seed.
   const { seed, generated } = resolveSeed(network);
+  const log = redactingLogger(baseLog, [seed]);
   log.info(
     `Wallet seed: ${seedFingerprint(seed)} (${generated ? 'generated, saved to deploy/.seeds' : 'from DEPLOY_SEED/.seeds'})`,
   );
@@ -106,7 +139,7 @@ async function main(): Promise<void> {
     log.info(`NIGHT balance: ${balance}`);
 
     // 4. DUST (fee resource): register UTXOs, then wait for dust > 0.
-    await registerDustUtxos(walletProvider, nightToken);
+    await registerDustUtxos(log, walletProvider, nightToken);
     await waitForDust(walletProvider, 10 * 60_000);
 
     // 5. Deploy.
@@ -191,7 +224,11 @@ async function waitForBalance(
 }
 
 /** Register unregistered NIGHT UTXOs for DUST generation. */
-async function registerDustUtxos(walletProvider: MidnightWalletProvider, nightToken: string): Promise<void> {
+async function registerDustUtxos(
+  log: Logger,
+  walletProvider: MidnightWalletProvider,
+  nightToken: string,
+): Promise<void> {
   const wallet = walletProvider.wallet;
   const st = await Rx.firstValueFrom(wallet.state());
   const unregistered = st.unshielded.availableCoins.filter(
@@ -222,11 +259,11 @@ async function waitForDust(walletProvider: MidnightWalletProvider, timeoutMs: nu
       Rx.timeout({ each: timeoutMs, with: () => Rx.throwError(() => new Error('wait-for-dust timeout')) }),
     ),
   );
-  log.info('DUST available.');
+  baseLog.info('DUST available.');
 }
 
 main().catch((e) => {
-  log.error(e instanceof Error ? e.message : e);
-  if (e instanceof Error && e.stack) log.debug(e.stack);
+  baseLog.error(e instanceof Error ? e.message : e);
+  if (e instanceof Error && e.stack) baseLog.debug(e.stack);
   process.exit(1);
 });

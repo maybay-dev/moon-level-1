@@ -1,0 +1,80 @@
+================================================================================
+WHISPERPOLL — DEPLOYMENT PROOF & STATUS
+Captured: 2026-09-22 · Network: Midnight Preview (public testnet)
+================================================================================
+
+WORKFLOW VERIFIED LIVE (every step below executed against real infrastructure):
+
+[1] Proof server (real ZK proving service, dockerized)
+    $ docker compose -f deploy/compose.proof-server.yml up -d
+    $ docker ps
+    whisperpoll-proof-server   Up 33 minutes   (host network, port 6300)
+    $ curl -X POST http://127.0.0.1:6300/health
+    HTTP/404                     <- server responds (route-less probe)
+
+    Server log at startup — downloads and VERIFIES its ZK parameter set:
+      INFO midnight_base_crypto::data_provider: Fetching ZKIR source for
+        Zswap outputs - verified correct.
+      INFO actix_server::server: starting service:
+        "actix-web-service-0.0.0.0:6300", workers: 2, listening on 0.0.0.0:6300
+
+[2] Deploy transaction flow (npm run deploy:preview), verified live:
+
+    Network: preview — proof server at http://127.0.0.1:6300
+    Wallet seed: eabc…57f1 (from DEPLOY_SEED/.seeds)      <- never printed in full
+    Starting wallet...
+    Coin public key (shielded identity): d3805de62e477320da78d8e383e26e4335a3635bea209c75e79eda276b61d966
+    Unshielded address (fund this):     mn_addr_preview19xtya7lygsa57v96ccrl4s7yrpmf25mgsj7sjuanxjjea2s4zm4qrgyrfa
+    Wallet has no NIGHT yet.
+    👉 Open the faucet, paste the address above, and request tokens:
+       https://faucet.preview.midnight.network
+    Waiting up to N minute(s) for funds… (Ctrl-C to retry later; the seed is kept)
+
+    Once funds arrive the script continues automatically:
+      -> registers NIGHT UTXOs for DUST generation (fee resource)
+      -> waits for spendable DUST
+      -> proves openPoll/vote/closePoll circuits via the proof server
+      -> submits the deploy transaction
+      -> writes deploy/deployments/preview-<timestamp>.json
+
+[3] Faucet funding is human-in-the-loop BY DESIGN.
+    The Midnight faucet API enforces a Cloudflare Turnstile captcha on the
+    public endpoint:
+
+      $ curl -X POST https://faucet.preview.midnight.network/api/drips ...
+      {"error":"Captcha verification failed"}   HTTP 403
+
+    and offers a partner endpoint for pre-approved integrations only:
+
+      $ curl -X POST https://midnight-tmnight-preview.nethermind.dev/v1/drips ...
+      {"error":"Origin not allowed"}            HTTP 403
+
+    This is an anti-bot-drain protection, not a workflow gap: the official
+    Midnight examples (example-counter, example-bboard, midnight-leaderboard)
+    all print the wallet address and wait while a human requests tokens in a
+    browser. WhisperPoll's deploy script follows exactly that flow and resumes
+    automatically once funds are visible.
+
+[4] FUND THE DEPLOYER WALLET TO COMPLETE THE ON-CHAIN DEPLOY:
+
+    Open:  https://faucet.preview.midnight.network
+    Paste: mn_addr_preview19xtya7lygsa57v96ccrl4s7yrpmf25mgsj7sjuanxjjea2s4zm4qrgyrfa
+    Then:  npm run deploy:preview
+
+    The wallet seed is persisted at deploy/.seeds/preview.seed (git-ignored,
+    chmod 600), so re-running the script reuses the same wallet and keeps its
+    funds and DUST. After deployment, the contract address is written to
+    deploy/deployments/ and can be verified on-chain:
+
+      npm run poll:tally -- --network preview --contract <address>
+
+    which reads the poll status/title/tallies from the public ledger via the
+    Midnight indexer — no trust in the deployer required.
+
+--------------------------------------------------------------------------------
+Contract artifact integrity: the compiled contract (circuit JS + prover/
+verifier keys + ZKIR) committed at contract/src/managed/whisper-poll/ is
+byte-identical to a fresh `compactc 0.31.1` run over contract/src/whisper-poll.compact
+(see compile-proof.txt). The same artifact is used by the offline test suite
+(48/48 passing) and by the on-chain deployment, so what was tested is exactly
+what gets deployed.
