@@ -25,14 +25,14 @@ export const NETWORKS: Record<
     indexerWS: 'wss://indexer.preview.midnight.network/api/v4/graphql/ws',
     node: 'https://rpc.preview.midnight.network',
     nodeWS: 'wss://rpc.preview.midnight.network',
-    faucet: 'https://faucet-0.preview.midnight.network',
+    faucet: 'https://faucet.preview.midnight.network/api/drips',
   },
   preprod: {
     indexer: 'https://indexer.preprod.midnight.network/api/v4/graphql',
     indexerWS: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
     node: 'https://rpc.preprod.midnight.network',
     nodeWS: 'wss://rpc.preprod.midnight.network',
-    faucet: 'https://faucet-0.preprod.midnight.network',
+    faucet: 'https://faucet.preprod.midnight.network/api/drips',
   },
 };
 

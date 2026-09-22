@@ -26,7 +26,7 @@ import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-pri
 import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
 import { setNetworkId, getNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import { unshieldedToken } from '@midnight-ntwrk/midnight-js-protocol/ledger';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedAddress as UnshieldedAddressClass } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { toHex } from '@midnight-ntwrk/midnight-js-utils';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import type { Logger } from 'pino';
@@ -82,8 +82,8 @@ async function main(): Promise<void> {
 
   try {
     // 3. Funds: faucet + wait.
-    const unshieldedState0 = await getInitialUnshieldedState(log, walletProvider.wallet.unshielded);
-    const addr = UnshieldedAddress.codec.encode(getNetworkId(), unshieldedState0.address);
+    const unshieldedState0 = await getInitialUnshieldedState(walletProvider.wallet.unshielded);
+    const addr = UnshieldedAddressClass.codec.encode(getNetworkId(), unshieldedState0.address);
     log.info(`Unshielded address: ${addr.toString()}`);
 
     const balance0 = unshieldedState0.balances[unshieldedToken().raw] ?? 0n;
@@ -123,7 +123,7 @@ async function main(): Promise<void> {
 
     const contractAddress = deployed.deployTxData.public.contractAddress;
     const deployTxHash = deployed.deployTxData.public.txHash;
-    const deployerAddress = toHex(walletProvider.getCoinPublicKey());
+    const deployerAddress: string = walletProvider.getCoinPublicKey();
     log.info(`✅ Contract deployed at: ${contractAddress}`);
     log.info(`   Deploy tx: ${deployTxHash}`);
 
@@ -163,7 +163,7 @@ async function waitForBalance(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await syncWallet(wallet).catch(() => undefined);
-    const st = await getInitialUnshieldedState(log, wallet.unshielded);
+    const st = await getInitialUnshieldedState(wallet.unshielded);
     const b = st.balances[unshieldedToken().raw] ?? 0n;
     if (b > 0n) return b;
     log.info('… still waiting for funds');
@@ -176,7 +176,7 @@ async function waitForBalance(
 async function generateDust(log: Logger, walletProvider: MidnightWalletProvider, seed: string): Promise<void> {
   const wallet = walletProvider.wallet;
   const dustState = await wallet.dust.waitForSyncedState();
-  const unshieldedState = await getInitialUnshieldedState(log, wallet.unshielded);
+  const unshieldedState = await getInitialUnshieldedState(wallet.unshielded);
   const utxos = unshieldedState.availableCoins.filter((c) => !c.meta.registeredForDustGeneration);
   if (utxos.length === 0) {
     log.info('No unregistered UTXOs — DUST generation already active.');
@@ -186,9 +186,10 @@ async function generateDust(log: Logger, walletProvider: MidnightWalletProvider,
   const { createKeystore } = await import('@midnight-ntwrk/wallet-sdk-unshielded-wallet');
   const { HDWallet, Roles } = await import('@midnight-ntwrk/wallet-sdk-hd');
   const seedBuffer = Buffer.from(seed, 'hex');
-  const hdResult = HDWallet.fromSeed(seedBuffer) as { type: string; hdWallet: InstanceType<typeof HDWallet> };
+  const hdResult = HDWallet.fromSeed(new Uint8Array(seedBuffer));
   if (hdResult.type !== 'seedOk') throw new Error('Invalid seed for HD derivation');
-  const derived = hdResult.hdWallet.selectAccount(0).selectRole(Roles.NightExternal).deriveKeyAt(0);
+  const hd = hdResult.hdWallet;
+  const derived = hd.selectAccount(0).selectRole(Roles.NightExternal).deriveKeyAt(0);
   if (derived.type === 'keyOutOfBounds') throw new Error('Key derivation out of bounds');
   const keystore = createKeystore(derived.key, getNetworkId());
 
