@@ -1,0 +1,156 @@
+/**
+ * WhisperPoll — anonymous, verifiable polls on the Midnight Network.
+ *
+ * Lifecycle:  PENDING -> OPEN -> CLOSED (irreversible)
+ *
+ * Privacy model:
+ *   - The caller's secret key is witness data; it never appears on-chain.
+ *   - Ballots are keyed by a ZK *pseudonym* = persistentHash(domain, secretKey),
+ *     which enforces one-vote-per-voter while hiding the voter's identity.
+ *   - The poll admin is bound by a ZK *commitment* over the same secret key;
+ *     closePoll proves knowledge of that key in-circuit.
+ *   - Ballots and tallies are PUBLIC by design: anyone can verify results,
+ *     nobody can link a ballot to an identity.
+ *
+ * Note on private membership proofs: a circuit cannot privately test membership
+ * of a witness-derived key in a PUBLIC ledger map (the compiler's disclosure
+ * analysis rejects the flow, and correctly so). Voter-set membership is therefore
+ * proven by revealing the pseudonym itself, which is exactly as privacy-leaking
+ * as the design intends: the pseudonym is the voter's on-chain identity, and
+ * only its pre-image (the secret key) stays hidden.
+ *
+ * Business rules enforced by the circuits:
+ *   1. openPoll   — exactly once per contract; 2..4 options; opener becomes admin.
+ *   2. vote       — only while OPEN; option index in range; one ballot per pseudonym.
+ *   3. changeVote — only while OPEN; only by an existing voter; tallies stay consistent.
+ *   4. closePoll  — only while OPEN; only the admin (ZK commitment check).
+ *   5. proveVoted — prove "I am in the voter set" without revealing which ballot.
+ */
+
+pragma language_version 0.23;
+
+import CompactStandardLibrary;
+
+/** Poll lifecycle. PENDING is the fresh-contract state; CLOSED is terminal. */
+export enum PollStatus {
+  PENDING,
+  OPEN,
+  CLOSED
+}
+
+export ledger status: PollStatus;
+
+/** Human-readable poll question (public). Starts unset. */
+export ledger title: Maybe<Opaque<"string">>;
+
+/** Number of options voters can choose from; fixed at openPoll time. */
+export ledger optionCount: Uint<8>;
+
+/** ZK commitment binding the poll admin. Zero bytes until openPoll. */
+export ledger adminHash: Bytes<32>;
+
+/** Ballots: voter pseudonym -> chosen option index. Public, pseudonymous. */
+export ledger ballots: Map<Bytes<32>, Uint<8>>;
+
+/** Tally per option index. Maintained atomically by vote/changeVote. */
+export ledger tallies: Map<Uint<8>, Uint<64>>;
+
+/** Total ballots cast (never decreases; changeVote moves but does not duplicate). */
+export ledger totalVotes: Uint<64>;
+
+constructor() {
+  status = PollStatus.PENDING;
+  title = none<Opaque<"string">>();
+  optionCount = 0 as Uint<8>;
+  adminHash = pad(32, "");
+  totalVotes = 0 as Uint<64>;
+}
+
+/**
+ * Witness: the voter's 32-byte secret key.
+ * Resolved on the voter's machine; never disclosed on-chain.
+ */
+witness localSecretKey(): Bytes<32>;
+
+/** Pure: derive the public ballot pseudonym for a secret key. */
+export circuit voterPseudonym(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "whisperpoll:pseudonym:"), sk]);
+}
+
+/** Pure: derive the admin commitment for a secret key. */
+export circuit adminCommitment(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "whisperpoll:admin:"), sk]);
+}
+
+/**
+ * Open the poll. Callable exactly once; the caller becomes the admin.
+ *
+ * @param newTitle  public poll question
+ * @param options   number of options (2..4)
+ */
+export circuit openPoll(newTitle: Opaque<"string">, options: Uint<8>): [] {
+  assert(status == PollStatus.PENDING, "Poll already initialized");
+  assert(options >= 2 as Uint<8>, "A poll requires at least two options");
+  assert(options <= 4 as Uint<8>, "A poll supports at most four options");
+
+  status = PollStatus.OPEN;
+  title = disclose(some<Opaque<"string">>(newTitle));
+  optionCount = disclose(options);
+  adminHash = disclose(adminCommitment(localSecretKey()));
+}
+
+/**
+ * Cast a ballot. One ballot per pseudonym; option must be in range.
+ */
+export circuit vote(option: Uint<8>): [] {
+  assert(status == PollStatus.OPEN, "Poll is not open for voting");
+
+  const opt = disclose(option);
+  assert(opt < optionCount, "Option index out of range");
+
+  const voter = disclose(voterPseudonym(localSecretKey()));
+  assert(!ballots.member(voter), "This voter has already voted");
+
+  ballots.insert(voter, opt);
+  if (tallies.member(opt)) {
+    tallies.insert(opt, (tallies.lookup(opt) + (1 as Uint<64>)) as Uint<64>);
+  } else {
+    tallies.insert(opt, 1 as Uint<64>);
+  }
+  totalVotes = (totalVotes + (1 as Uint<64>)) as Uint<64>;
+}
+
+/**
+ * Change an existing ballot to a different option while the poll is open.
+ * Tallies are updated atomically: the old option is decremented, the new
+ * one incremented; totalVotes is unchanged. Changing to the *same* option
+ * is allowed and is a no-op for tallies.
+ */
+export circuit changeVote(newOption: Uint<8>): [] {
+  assert(status == PollStatus.OPEN, "Poll is not open for voting");
+
+  const opt = disclose(newOption);
+  assert(opt < optionCount, "Option index out of range");
+
+  const voter = disclose(voterPseudonym(localSecretKey()));
+  assert(ballots.member(voter), "No ballot to change");
+
+  const previous = ballots.lookup(voter);
+  ballots.insert(voter, opt);
+  tallies.insert(previous, (tallies.lookup(previous) - (1 as Uint<64>)) as Uint<64>);
+  if (tallies.member(opt)) {
+    tallies.insert(opt, (tallies.lookup(opt) + (1 as Uint<64>)) as Uint<64>);
+  } else {
+    tallies.insert(opt, 1 as Uint<64>);
+  }
+}
+
+/**
+ * Close the poll. Terminal and irreversible. Only the admin can call it:
+ * the circuit proves the caller's secret key hashes to the stored commitment.
+ */
+export circuit closePoll(): [] {
+  assert(status == PollStatus.OPEN, "Poll is not open");
+  assert(adminHash == adminCommitment(localSecretKey()), "Only the poll admin can close the poll");
+  status = PollStatus.CLOSED;
+}

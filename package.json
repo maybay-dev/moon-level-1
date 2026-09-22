@@ -1,0 +1,46 @@
+{
+  "name": "whisperpoll",
+  "version": "1.0.0",
+  "description": "WhisperPoll — anonymous, verifiable polls on the Midnight Network",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.11.1"
+  },
+  "workspaces": [
+    "contract",
+    "deploy"
+  ],
+  "scripts": {
+    "compile": "npm run compact --workspace @whisperpoll/contract",
+    "build": "npm run build --workspace @whisperpoll/contract && npm run build --workspace @whisperpoll/deploy",
+    "test": "npm run test --workspace @whisperpoll/contract",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "proof-server:up": "docker compose -f deploy/compose.proof-server.yml up -d --wait",
+    "proof-server:down": "docker compose -f deploy/compose.proof-server.yml down",
+    "proof-server:logs": "docker compose -f deploy/compose.proof-server.yml logs -f",
+    "deploy:preview": "npm run deploy:preview --workspace @whisperpoll/deploy",
+    "deploy:preprod": "npm run deploy:preprod --workspace @whisperpoll/deploy",
+    "poll:open": "npm run interact --workspace @whisperpoll/deploy -- open",
+    "poll:vote": "npm run interact --workspace @whisperpoll/deploy -- vote",
+    "poll:change": "npm run interact --workspace @whisperpoll/deploy -- change",
+    "poll:close": "npm run interact --workspace @whisperpoll/deploy -- close",
+    "poll:tally": "npm run interact --workspace @whisperpoll/deploy -- tally",
+    "audit": "bash scripts/audit.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "smoldot": "npm:@aspect-build/empty@0.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "classic-level@3.0.0": true,
+    "msgpackr-extract@3.0.4": true,
+    "protobufjs@7.6.6": true,
+    "ssh2@1.17.0": true,
+    "cpu-features@0.0.10": true
+  }
+}

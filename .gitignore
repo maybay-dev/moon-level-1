@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+*.tsbuildinfo
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
+deploy/.seeds/
+*.seed
+*.mnemonic
+deployments/*.local.json
+
+# Wallet / private state stores
+db/
+private-state/
+*.sqlite
+*.leveldb/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Compact compiler caches
+.compact/
+.zkparams/

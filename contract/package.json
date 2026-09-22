@@ -1,0 +1,34 @@
+{
+  "name": "@whisperpoll/contract",
+  "version": "1.0.0",
+  "description": "WhisperPoll — anonymous, verifiable polls on the Midnight Network (Compact contract)",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/whisper-poll.compact",
+    "managed"
+  ],
+  "scripts": {
+    "compact": "compact compile src/whisper-poll.compact src/managed/whisper-poll",
+    "build": "rm -rf dist && tsc --project tsconfig.build.json && cp -Rf ./src/managed ./dist/managed && cp ./src/whisper-poll.compact ./dist",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.16.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
