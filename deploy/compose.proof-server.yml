@@ -1,8 +1,10 @@
 services:
   proof-server:
     image: midnightntwrk/proof-server:8.0.3
-    command: ['midnight-proof-server', '-v']
+    command: ['midnight-proof-server', '--port', '6300']
     container_name: whisperpoll-proof-server
-    ports:
-      - '6300:6300'
+    # host networking: the proof server downloads large ZK parameter files from
+    # its S3 parameter store at startup; some sandboxed bridge networks break
+    # those transfers (MTU/keepalive). host mode avoids that and exposes :6300.
+    network_mode: host
     restart: unless-stopped
