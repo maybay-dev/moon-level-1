@@ -25,15 +25,21 @@ export const NETWORKS: Record<
     indexerWS: 'wss://indexer.preview.midnight.network/api/v4/graphql/ws',
     node: 'https://rpc.preview.midnight.network',
     nodeWS: 'wss://rpc.preview.midnight.network',
-    faucet: 'https://faucet.preview.midnight.network/api/drips',
+    faucet: 'https://faucet.preview.midnight.network',
   },
   preprod: {
     indexer: 'https://indexer.preprod.midnight.network/api/v4/graphql',
     indexerWS: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
     node: 'https://rpc.preprod.midnight.network',
     nodeWS: 'wss://rpc.preprod.midnight.network',
-    faucet: 'https://faucet.preprod.midnight.network/api/drips',
+    faucet: 'https://faucet.preprod.midnight.network',
   },
+};
+
+/** Human faucet URLs (captcha-gated in browser — funding is a manual step). */
+export const FAUCET_URLS: Record<NetworkName, string> = {
+  preview: 'https://faucet.preview.midnight.network',
+  preprod: 'https://faucet.preprod.midnight.network',
 };
 
 /** Resolve the repo root (two levels above deploy/scripts). */

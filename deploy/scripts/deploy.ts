@@ -1,15 +1,16 @@
 /**
  * Headless WhisperPoll deployment to Midnight Preview/Preprod.
  *
- * Flow:
+ * Flow (mirrors the official Midnight examples):
  *   1. attach to the locally running proof server (docker compose)
  *   2. build a wallet from DEPLOY_SEED (or a persisted generated seed)
- *   3. request faucet funds and wait for NIGHT
- *   4. register NIGHT UTXOs for DUST generation (fee resource)
- *   5. prove + submit the deploy transaction
+ *   3. print the unshielded address; if unfunded, wait while you visit the
+ *      faucet website (funding is captcha-gated and intentionally manual)
+ *   4. register NIGHT UTXOs for DUST generation and wait for fee DUST
+ *   5. prove + submit the deploy transaction via the proof server
  *   6. write a deployment receipt to deploy/deployments/
  *
- * Secrets: the seed is read from env or deploy/.seeds (git-ignored). It is
+ * Secrets: the seed lives in DEPLOY_SEED or deploy/.seeds (git-ignored) and is
  * never logged; only a short fingerprint is printed.
  */
 
@@ -17,20 +18,13 @@ import {
   StaticProofServerContainer,
   MidnightWalletProvider,
   initializeMidnightProviders,
-  FaucetClient,
-  syncWallet,
-  getInitialUnshieldedState,
 } from '@midnight-ntwrk/testkit-js';
 import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
-import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
-import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
 import { setNetworkId, getNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import { unshieldedToken } from '@midnight-ntwrk/midnight-js-protocol/ledger';
-import { UnshieldedAddress as UnshieldedAddressClass } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { toHex } from '@midnight-ntwrk/midnight-js-utils';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import type { Logger } from 'pino';
 import pino from 'pino';
+import * as Rx from 'rxjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -38,10 +32,10 @@ import { WhisperPollCompiledContract } from '@whisperpoll/contract';
 import type { WhisperPollPrivateState } from '@whisperpoll/contract';
 import { createWhisperPollPrivateState } from '@whisperpoll/contract';
 import {
-  NETWORKS,
+  FAUCET_URLS,
   checkProofServer,
-  ensureDirs,
   deploymentsDir,
+  ensureDirs,
   envConfiguration,
   privateStateStoreName,
   resolveNetwork,
@@ -51,17 +45,19 @@ import {
   type NetworkName,
 } from './config.js';
 
-const log: Logger = pino({
-  level: process.env.LOG_LEVEL ?? 'info',
-  transport: process.stdout.isTTY ? { target: 'pino-pretty' } : undefined,
-});
+const log: Logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
 const randomSecretKey = (): Uint8Array => crypto.getRandomValues(new Uint8Array(32));
 
+function argValue(flag: string): string | undefined {
+  const argv = process.argv.slice(2);
+  const i = argv.indexOf(flag);
+  return i >= 0 ? argv[i + 1] : undefined;
+}
+
 async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const networkArg = args.find((a) => a.startsWith('--network'))?.split('=')[1] ?? args[args.indexOf('--network') + 1];
-  const network: NetworkName = resolveNetwork(networkArg === '--network' ? undefined : networkArg);
+  const network: NetworkName = resolveNetwork(argValue('--network'));
+  const waitMinutes = Number(argValue('--wait-minutes') ?? '20');
 
   ensureDirs();
   setNetworkId(network);
@@ -70,51 +66,59 @@ async function main(): Promise<void> {
   await checkProofServer(env.proofServer);
   log.info(`Network: ${network} — proof server at ${env.proofServer}`);
 
-  // 1. Attach to the externally managed proof server.
   const proofServerContainer = new StaticProofServerContainer(6300);
 
-  // 2. Wallet (seed from env or persisted generated seed).
+  // 1-2. Wallet from persisted/env seed.
   const { seed, generated } = resolveSeed(network);
-  log.info(`Wallet seed: ${seedFingerprint(seed)} (${generated ? 'generated, saved to deploy/.seeds' : 'from DEPLOY_SEED/.seeds'})`);
+  log.info(
+    `Wallet seed: ${seedFingerprint(seed)} (${generated ? 'generated, saved to deploy/.seeds' : 'from DEPLOY_SEED/.seeds'})`,
+  );
 
   const walletProvider: MidnightWalletProvider = await MidnightWalletProvider.build(log, env, seed);
-  await walletProvider.start();
+  await walletProvider.start(false); // no auto fund-wait; we orchestrate below
 
   try {
-    // 3. Funds: faucet + wait.
-    const unshieldedState0 = await getInitialUnshieldedState(walletProvider.wallet.unshielded);
-    const addr = UnshieldedAddressClass.codec.encode(getNetworkId(), unshieldedState0.address);
-    log.info(`Unshielded address: ${addr.toString()}`);
+    const nightToken = unshieldedToken().raw;
 
-    const balance0 = unshieldedState0.balances[unshieldedToken().raw] ?? 0n;
-    if (balance0 === 0n) {
-      log.info(`Requesting funds from faucet ${env.faucet} …`);
-      await new FaucetClient(env.faucet, log).requestTokens(addr.toString());
+    // 3. Addresses + funding.
+    const state0 = await firstState(walletProvider);
+    const unshieldedAddress = walletProvider.unshieldedKeystore.getBech32Address().asString();
+    log.info(`Coin public key (shielded identity): ${state0.address.coinPublicKeyString()}`);
+    log.info(`Unshielded address (fund this):     ${unshieldedAddress}`);
+
+    let balance = await currentBalance(walletProvider, nightToken);
+    if (balance === 0n) {
+      log.warn('Wallet has no NIGHT yet.');
+      log.info('👉 Open the faucet, paste the address above, and request tokens:');
+      log.info(`   ${FAUCET_URLS[network]}`);
+      log.info(`Waiting up to ${waitMinutes} minute(s) for funds… (Ctrl-C to retry later; the seed is kept)`);
+      try {
+        balance = await waitForBalance(walletProvider, nightToken, waitMinutes * 60_000);
+      } catch {
+        balance = 0n; // timeout — handled below with a friendly message
+      }
     }
-
-    log.info('Waiting for NIGHT funds to be visible (this can take a couple of minutes)…');
-    const nightBalance = await waitForBalance(walletProvider.wallet, env, log);
-    log.info(`NIGHT balance: ${nightBalance}`);
-    if (nightBalance === 0n) {
+    if (balance === 0n) {
       throw new Error(
-        `Wallet ${addr.toString()} has no NIGHT. Fund it via ${env.faucet} and re-run this script.`,
+        `No funds after waiting. Re-run this command after funding ${unshieldedAddress} via ${FAUCET_URLS[network]}.`,
       );
     }
+    log.info(`NIGHT balance: ${balance}`);
 
-    // 4. DUST generation (fees) — register all unregistered UTXOs.
-    await generateDust(log, walletProvider, seed);
+    // 4. DUST (fee resource): register UTXOs, then wait for dust > 0.
+    await registerDustUtxos(walletProvider, nightToken);
+    await waitForDust(walletProvider, 10 * 60_000);
 
-    // 5. Providers + deploy.
-    const providers = initializeMidnightProviders<'openPoll' | 'vote' | 'changeVote' | 'closePoll', WhisperPollPrivateState>(
-      walletProvider,
-      env,
-      {
-        privateStateStoreName: privateStateStoreName(),
-        zkConfigPath: zkConfigPath(),
-      },
-    );
+    // 5. Deploy.
+    const providers = initializeMidnightProviders<
+      'openPoll' | 'vote' | 'changeVote' | 'closePoll',
+      WhisperPollPrivateState
+    >(walletProvider, env, {
+      privateStateStoreName: privateStateStoreName(),
+      zkConfigPath: zkConfigPath(),
+    });
 
-    log.info('Proving and submitting deploy transaction…');
+    log.info('Proving and submitting deploy transaction (1-3 min)…');
     const deployed = await deployContract(providers, {
       compiledContract: WhisperPollCompiledContract,
       privateStateId: 'whisperpoll-private-state',
@@ -123,7 +127,6 @@ async function main(): Promise<void> {
 
     const contractAddress = deployed.deployTxData.public.contractAddress;
     const deployTxHash = deployed.deployTxData.public.txHash;
-    const deployerAddress: string = walletProvider.getCoinPublicKey();
     log.info(`✅ Contract deployed at: ${contractAddress}`);
     log.info(`   Deploy tx: ${deployTxHash}`);
 
@@ -133,80 +136,97 @@ async function main(): Promise<void> {
       network,
       contractAddress,
       deployTxHash,
-      deployerCoinPublicKey: deployerAddress,
-      deployerUnshieldedAddress: addr.toString(),
-      compiler: 'compact compile 0.31.1 (language_version 0.23)',
+      deployerCoinPublicKey: state0.address.coinPublicKeyString(),
+      deployerUnshieldedAddress: unshieldedAddress,
+      compiler: 'compact compile 0.31.1 (pragma language_version 0.23)',
       toolchain: {
-        compact: '0.31.1',
-        'compact-runtime': '0.16.0',
-        'midnight-js': '4.1.1',
+        compactc: '0.31.1',
+        '@midnight-ntwrk/compact-runtime': '0.16.0',
+        '@midnight-ntwrk/midnight-js-*': '4.1.1',
       },
-      endpoints: NETWORKS[network],
-      proofServer: env.proofServer,
+      endpoints: {
+        indexer: env.indexer,
+        node: env.node,
+        proofServer: env.proofServer,
+      },
       deployedAt: new Date().toISOString(),
     };
     const file = path.join(deploymentsDir(), `${network}-${Date.now()}.json`);
     fs.writeFileSync(file, JSON.stringify(receipt, null, 2) + '\n');
     log.info(`Receipt written: ${file}`);
+    process.stdout.write(`\nWHISPERPOLL_CONTRACT_ADDRESS=${contractAddress}\n\n`);
   } finally {
     await walletProvider.stop();
   }
 }
 
-/** Poll the wallet until the unshielded NIGHT balance is > 0 (or timeout). */
-async function waitForBalance(
-  wallet: WalletFacade,
-  env: ReturnType<typeof envConfiguration>,
-  log: Logger,
-  timeoutMs = 10 * 60_000,
-): Promise<bigint> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    await syncWallet(wallet).catch(() => undefined);
-    const st = await getInitialUnshieldedState(wallet.unshielded);
-    const b = st.balances[unshieldedToken().raw] ?? 0n;
-    if (b > 0n) return b;
-    log.info('… still waiting for funds');
-    await new Promise((r) => setTimeout(r, 15_000));
-  }
-  return 0n;
+/** Snapshot of the wallet's facade state. */
+async function firstState(walletProvider: MidnightWalletProvider) {
+  return Rx.firstValueFrom(walletProvider.wallet.shielded.state);
 }
 
-/** Register NIGHT UTXOs for DUST generation (the fee resource). */
-async function generateDust(log: Logger, walletProvider: MidnightWalletProvider, seed: string): Promise<void> {
+/** Current unshielded NIGHT balance (0 if unknown). */
+async function currentBalance(walletProvider: MidnightWalletProvider, nightToken: string): Promise<bigint> {
+  try {
+    const st = await Rx.firstValueFrom(walletProvider.wallet.state());
+    return st.unshielded.balances[nightToken] ?? 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+/** Subscribe once and resolve when the unshielded NIGHT balance is positive. */
+async function waitForBalance(
+  walletProvider: MidnightWalletProvider,
+  nightToken: string,
+  timeoutMs: number,
+): Promise<bigint> {
+  return Rx.firstValueFrom(
+    walletProvider.wallet.state().pipe(
+      Rx.map((st) => st.unshielded.balances[nightToken] ?? 0n),
+      Rx.filter((b) => b > 0n),
+      Rx.timeout({ each: timeoutMs, with: () => Rx.throwError(() => new Error('wait-for-funds timeout')) }),
+    ),
+  );
+}
+
+/** Register unregistered NIGHT UTXOs for DUST generation. */
+async function registerDustUtxos(walletProvider: MidnightWalletProvider, nightToken: string): Promise<void> {
   const wallet = walletProvider.wallet;
-  const dustState = await wallet.dust.waitForSyncedState();
-  const unshieldedState = await getInitialUnshieldedState(wallet.unshielded);
-  const utxos = unshieldedState.availableCoins.filter((c) => !c.meta.registeredForDustGeneration);
-  if (utxos.length === 0) {
-    log.info('No unregistered UTXOs — DUST generation already active.');
+  const st = await Rx.firstValueFrom(wallet.state());
+  const unregistered = st.unshielded.availableCoins.filter(
+    (c) => c.utxo.type === nightToken && c.meta.registeredForDustGeneration === false,
+  );
+  if (unregistered.length === 0) {
+    log.info('All NIGHT UTXOs already registered for DUST generation.');
     return;
   }
-  log.info(`Registering ${utxos.length} NIGHT UTXO(s) for DUST generation…`);
-  const { createKeystore } = await import('@midnight-ntwrk/wallet-sdk-unshielded-wallet');
-  const { HDWallet, Roles } = await import('@midnight-ntwrk/wallet-sdk-hd');
-  const seedBuffer = Buffer.from(seed, 'hex');
-  const hdResult = HDWallet.fromSeed(new Uint8Array(seedBuffer));
-  if (hdResult.type !== 'seedOk') throw new Error('Invalid seed for HD derivation');
-  const hd = hdResult.hdWallet;
-  const derived = hd.selectAccount(0).selectRole(Roles.NightExternal).deriveKeyAt(0);
-  if (derived.type === 'keyOutOfBounds') throw new Error('Key derivation out of bounds');
-  const keystore = createKeystore(derived.key, getNetworkId());
-
+  log.info(`Registering ${unregistered.length} NIGHT UTXO(s) for DUST generation…`);
+  const keystore = walletProvider.unshieldedKeystore;
   const recipe = await wallet.registerNightUtxosForDustGeneration(
-    utxos,
+    unregistered,
     keystore.getPublicKey(),
     (payload) => keystore.signData(payload),
-    dustState.address,
   );
   const tx = await wallet.finalizeRecipe(recipe);
   const txId = await wallet.submitTransaction(tx);
-  log.info(`DUST registration submitted: ${txId}`);
-  await syncWallet(wallet).catch(() => undefined);
+  log.info(`DUST registration tx: ${txId}`);
+}
+
+/** Wait until spendable DUST exists (fee resource). */
+async function waitForDust(walletProvider: MidnightWalletProvider, timeoutMs: number): Promise<void> {
+  await Rx.firstValueFrom(
+    walletProvider.wallet.state().pipe(
+      Rx.map((st) => st.dust.balance(new Date())),
+      Rx.filter((d) => d > 0n),
+      Rx.timeout({ each: timeoutMs, with: () => Rx.throwError(() => new Error('wait-for-dust timeout')) }),
+    ),
+  );
+  log.info('DUST available.');
 }
 
 main().catch((e) => {
-  log.error(e instanceof Error ? `${e.message}` : e);
+  log.error(e instanceof Error ? e.message : e);
   if (e instanceof Error && e.stack) log.debug(e.stack);
   process.exit(1);
 });
