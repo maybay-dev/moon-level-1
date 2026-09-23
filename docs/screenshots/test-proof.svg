@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="351" viewBox="0 0 780 351" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">
+  <!-- Faithful render of real terminal output. Regenerate: scripts/capture_evidence.sh -->
+  <rect width="780" height="351" rx="10" fill="#0d1117" stroke="#30363d"/>
+  <rect width="780" height="38" rx="10" fill="#161b22"/>
+  <rect y="28" width="780" height="10" fill="#161b22"/>
+  <circle cx="18" cy="19" r="6" fill="#ff5f57"/>
+  <circle cx="38" cy="19" r="6" fill="#febc2e"/>
+  <circle cx="58" cy="19" r="6" fill="#28c840"/>
+  <text x="390" y="24" text-anchor="middle" font-size="12" fill="#8b949e">WhisperPoll — test suite (vitest, real compiled circuits)</text>
+  <text x="18" y="47.4" font-size="13" fill="#8b949e">user@midnight:~/whisperpoll</text>
+  <text x="18" y="60" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#58a6ff">$</tspan> <tspan fill="#c9d1d9">npm test</tspan></text>
+<text x="18" y="81" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"></tspan></text>
+<text x="18" y="102" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9">&gt; @whisperpoll/contract@1.0.0 test</tspan></text>
+<text x="18" y="123" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9">&gt; vitest run</tspan></text>
+<text x="18" y="144" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"></tspan></text>
+<text x="18" y="165" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"> RUN  v4.1.11 /workspaces/whisperpoll/contract</tspan></text>
+<text x="18" y="186" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"></tspan></text>
+<text x="18" y="207" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"> </tspan><tspan fill="#3fb950">✓</tspan><tspan fill="#c9d1d9"> test/whisper-poll.test.ts (48 tests) 2024ms</tspan></text>
+<text x="18" y="228" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"></tspan></text>
+<text x="18" y="249" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"> Test Files  1 <tspan fill="#3fb950">passed</tspan> (1)</tspan></text>
+<text x="18" y="270" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9">      Tests  48 <tspan fill="#3fb950">passed</tspan> (48)</tspan></text>
+<text x="18" y="291" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"></tspan></text>
+<text x="18" y="312" xml:space="preserve" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13"><tspan fill="#c9d1d9"></tspan><tspan fill="#58a6ff">●</tspan><tspan fill="#c9d1d9"> All 48 tests pass against the REAL compiled ZK circuits.</tspan></text>
+</svg>
