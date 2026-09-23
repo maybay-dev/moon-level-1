@@ -12,18 +12,30 @@ WhisperPoll is a privacy-preserving polling contract for communities that need t
 - **Public verifiability** — tallies, total votes, and the full ballot pseudonym set are public ledger state,
 - **Admin control** — only the ZK-committed admin can close a poll.
 
-Built as a [Compact](https://docs.midnight.network/compact) smart contract for the [Midnight Network](https://midnight.network), tested against the real compiled ZK circuits, and deployed to a public Midnight testnet.
+Built as a [Compact](https://docs.midnight.network/compact) smart contract for the [Midnight Network](https://midnight.network), tested against the real compiled ZK circuits, with a one-command path to a public Midnight testnet deployment.
 
-## Status: deployed
+## Status
 
 | Item | Value |
 |------|-------|
-| Network | see [`deploy/deployments/`](deploy/deployments/) — latest receipt |
-| Contract address | recorded in the deployment receipt |
+| Compilation | ✅ `compact compile 0.31.1` — 4 circuits compiled ([proof](docs/evidence/compile-proof.txt)) |
+| Tests | ✅ 48/48 against the real compiled circuits ([proof](docs/evidence/test-proof.txt)) |
+| On-chain deploy | ⏳ pending — the deployer wallet is waiting for preview testnet tokens from the captcha-gated faucet |
 | Compiler | `compact compile 0.31.1` (language version 0.23) |
 | Toolchain | Node ≥ 24.11, npm ≥ 10 |
 
-See **[Deployment record](#deployment-record)** below for the live address and verification commands.
+### Deployer wallet (public funding address)
+
+The deployment wallet's **unshielded address** is public by design — it is how the wallet receives testnet tokens. Its secret seed is never committed (git-ignored, `deploy/.seeds/`).
+
+| | |
+|---|---|
+| Network | Midnight **Preview** testnet |
+| Address | `mn_addr_preview1y3d7d6hw48lmz3qwsae70xff8xmf8866vkzqn6djmhc276kwe95sadpq9q` |
+| Fund via | <https://faucet.preview.midnight.network> (paste the address, solve the captcha) |
+| Coin public key | `f1c3119717aa645930fc6783747d39bbe8583d46c20f1eea13e061e41d3d4c17` |
+
+Once funded, `npm run deploy:preview` picks up automatically and writes the receipt with the live contract address to [`deploy/deployments/`](deploy/deployments/).
 
 ---
 
@@ -150,7 +162,7 @@ npm run poll:tally -- --network preview --contract <address>
 
 ## Deployment record
 
-The authoritative record of live deployments lives in [`deploy/deployments/`](deploy/deployments/). Each receipt is JSON with `network`, `contractAddress`, `deployTxHash`, `deployerAddress`, endpoints, and timestamp. Verify any receipt on-chain:
+The authoritative record of live deployments lives in [`deploy/deployments/`](deploy/deployments/). After a successful deploy, each receipt is a JSON file with `network`, `contractAddress`, `deployTxHash`, `deployerAddress`, endpoints, and timestamp. Once a receipt exists, verify it on-chain (no trust in the deployer required):
 
 ```bash
 npx tsx deploy/scripts/interact.ts --network <network> --contract <address> --action tally
