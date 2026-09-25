@@ -20,7 +20,7 @@ Built as a [Compact](https://docs.midnight.network/compact) smart contract for t
 |------|-------|
 | Compilation | ✅ `compact compile 0.31.1` — 4 circuits compiled ([proof](docs/evidence/compile-proof.txt)) |
 | Tests | ✅ 48/48 against the real compiled circuits ([proof](docs/evidence/test-proof.txt)) |
-| On-chain deploy | ⏳ pending — no deployment receipt yet: the Preview deployer wallet holds testnet funds, the Preprod wallet is still awaiting tokens from the captcha-gated faucet |
+| On-chain deploy | ⏳ pending — no deployment receipt yet: both deployer wallets are funded (Preprod also registered for DUST); the deploy transaction has not been submitted |
 | Compiler | `compact compile 0.31.1` (language version 0.23) |
 | Toolchain | Node ≥ 24.11, npm ≥ 10 |
 
@@ -33,7 +33,7 @@ Each network gets its own deployment wallet, persisted as `deploy/.seeds/<networ
 | Address | `mn_addr_preview1y3d7d6hw48lmz3qwsae70xff8xmf8866vkzqn6djmhc276kwe95sadpq9q` | `mn_addr_preprod129lknssx5lclnq8h47q534qqc0klylgsah2zdmsvxx9240u39jcq3kw75n` |
 | Fund via | <https://faucet.preview.midnight.network> | <https://faucet.preprod.midnight.network> |
 | Coin public key | `f1c3119717aa645930fc6783747d39bbe8583d46c20f1eea13e061e41d3d4c17` | `6c2c52a74e9b7d6aea7e3a09464ffd89c569c4902aa57dfc1c1a45e111a5ba81` |
-| Funding status | ✅ funded — 5,000,000,000 raw NIGHT, unspent (tx `b8dbaf35415aea90a199a6044601ebaeee09da6477f741117ef43ac780084929`, block 994300, 2026-09-23 17:20:30 UTC) | ⏳ awaiting tokens — no unshielded transaction history yet |
+| Funding status | ✅ funded — 5,000,000,000 raw NIGHT, unspent (tx `b8dbaf35415aea90a199a6044601ebaeee09da6477f741117ef43ac780084929`, block 994300, 2026-09-23 17:20:30 UTC) | ✅ funded and registered for DUST generation — 5,000,000,000 raw NIGHT (drip tx `b9a0ddcca233547dc0c33644c6cd74438e20b2b239f39fc3af11886fcc0d6a14`, block 2707307, 2026-09-25 18:38:36 UTC; DUST registration tx `d1914256450812d825d8130ba2edb81a16ef47091bf1eea84b3574b45d146482`, block 2707426, 2026-09-25 18:50:30 UTC) |
 
 Funding is confirmed on-chain, not by trust: a drip appears as an unshielded NIGHT UTXO owned by the address in the network's indexer, and the deploy script waits for that balance before it proves anything.
 Once funds arrive, `npm run deploy:preview` or `npm run deploy:preprod` picks up automatically and writes the receipt with the live contract address to [`deploy/deployments/`](deploy/deployments/).
