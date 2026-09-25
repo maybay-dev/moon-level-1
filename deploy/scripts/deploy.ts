@@ -81,6 +81,14 @@ function redactingLogger(base: Logger, secrets: string[]): Logger {
 
 const randomSecretKey = (): Uint8Array => crypto.getRandomValues(new Uint8Array(32));
 
+/** How many times to attempt the DUST-registration submission before giving up. */
+const DUST_REGISTRATION_ATTEMPTS = 4;
+
+/** Exponential backoff between submission attempts: 5s, 15s, 45s. */
+const submissionBackoffMs = (attempt: number): number => 5_000 * 3 ** (attempt - 1);
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 function argValue(flag: string): string | undefined {
   const argv = process.argv.slice(2);
   const i = argv.indexOf(flag);
@@ -119,6 +127,9 @@ async function main(): Promise<void> {
     log.info(`Coin public key (shielded identity): ${state0.address.coinPublicKeyString()}`);
     log.info(`Unshielded address (fund this):     ${unshieldedAddress}`);
 
+    // The unshielded view catches up asynchronously after start(), so reading the
+    // balance straight away reports 0 for a wallet that is in fact funded.
+    await waitForUnshieldedSync(log, walletProvider, 60_000);
     let balance = await currentBalance(walletProvider, nightToken);
     if (balance === 0n) {
       log.warn('Wallet has no NIGHT yet.');
@@ -198,6 +209,34 @@ async function firstState(walletProvider: MidnightWalletProvider) {
   return Rx.firstValueFrom(walletProvider.wallet.shielded.state);
 }
 
+/**
+ * Best-effort wait for the unshielded view to finish catching up, so an already
+ * funded wallet is not reported as empty. If it does not complete in time we log
+ * and carry on — the funding wait below still resolves once the balance arrives.
+ */
+async function waitForUnshieldedSync(
+  log: Logger,
+  walletProvider: MidnightWalletProvider,
+  timeoutMs: number,
+): Promise<void> {
+  try {
+    await Rx.firstValueFrom(
+      walletProvider.wallet.state().pipe(
+        Rx.filter((st) => st.unshielded.progress?.isStrictlyComplete() === true),
+        Rx.timeout({
+          each: timeoutMs,
+          with: () => Rx.throwError(() => new Error('unshielded-sync timeout')),
+        }),
+      ),
+    );
+  } catch {
+    log.warn(
+      `Unshielded view did not finish syncing within ${Math.round(timeoutMs / 1000)}s; ` +
+        'continuing — if this wallet is funded the balance appears shortly.',
+    );
+  }
+}
+
 /** Current unshielded NIGHT balance (0 if unknown). */
 async function currentBalance(walletProvider: MidnightWalletProvider, nightToken: string): Promise<bigint> {
   try {
@@ -223,31 +262,57 @@ async function waitForBalance(
   );
 }
 
-/** Register unregistered NIGHT UTXOs for DUST generation. */
+/**
+ * Register unregistered NIGHT UTXOs for DUST generation.
+ *
+ * The node client disconnects its websocket right after a submission, so a submit
+ * issued moments after wallet start can lose that race and fail with a transport
+ * error ("disconnected … Normal Closure") rather than a rejection. The work is
+ * idempotent — state is re-read each attempt, so a registration that did land ends
+ * the loop — so retrying with backoff is safe and cheaper than a manual re-run.
+ */
 async function registerDustUtxos(
   log: Logger,
   walletProvider: MidnightWalletProvider,
   nightToken: string,
 ): Promise<void> {
   const wallet = walletProvider.wallet;
-  const st = await Rx.firstValueFrom(wallet.state());
-  const unregistered = st.unshielded.availableCoins.filter(
-    (c) => c.utxo.type === nightToken && c.meta.registeredForDustGeneration === false,
-  );
-  if (unregistered.length === 0) {
-    log.info('All NIGHT UTXOs already registered for DUST generation.');
-    return;
-  }
-  log.info(`Registering ${unregistered.length} NIGHT UTXO(s) for DUST generation…`);
   const keystore = walletProvider.unshieldedKeystore;
-  const recipe = await wallet.registerNightUtxosForDustGeneration(
-    unregistered,
-    keystore.getPublicKey(),
-    (payload) => keystore.signData(payload),
-  );
-  const tx = await wallet.finalizeRecipe(recipe);
-  const txId = await wallet.submitTransaction(tx);
-  log.info(`DUST registration tx: ${txId}`);
+
+  for (let attempt = 1; attempt <= DUST_REGISTRATION_ATTEMPTS; attempt++) {
+    const st = await Rx.firstValueFrom(wallet.state());
+    const unregistered = st.unshielded.availableCoins.filter(
+      (c) => c.utxo.type === nightToken && c.meta.registeredForDustGeneration === false,
+    );
+    if (unregistered.length === 0) {
+      log.info('All NIGHT UTXOs already registered for DUST generation.');
+      return;
+    }
+
+    log.info(
+      `Registering ${unregistered.length} NIGHT UTXO(s) for DUST generation… ` +
+        `(attempt ${attempt}/${DUST_REGISTRATION_ATTEMPTS})`,
+    );
+    try {
+      const recipe = await wallet.registerNightUtxosForDustGeneration(
+        unregistered,
+        keystore.getPublicKey(),
+        (payload) => keystore.signData(payload),
+      );
+      const tx = await wallet.finalizeRecipe(recipe);
+      const txId = await wallet.submitTransaction(tx);
+      log.info(`DUST registration tx: ${txId}`);
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (attempt === DUST_REGISTRATION_ATTEMPTS) throw e;
+      const delay = submissionBackoffMs(attempt);
+      log.warn(
+        `DUST registration submission failed (${msg}); retrying in ${Math.round(delay / 1000)}s…`,
+      );
+      await sleep(delay);
+    }
+  }
 }
 
 /** Wait until spendable DUST exists (fee resource). */
