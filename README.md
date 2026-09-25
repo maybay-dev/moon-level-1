@@ -20,22 +20,23 @@ Built as a [Compact](https://docs.midnight.network/compact) smart contract for t
 |------|-------|
 | Compilation | ✅ `compact compile 0.31.1` — 4 circuits compiled ([proof](docs/evidence/compile-proof.txt)) |
 | Tests | ✅ 48/48 against the real compiled circuits ([proof](docs/evidence/test-proof.txt)) |
-| On-chain deploy | ⏳ pending — the deployer wallet is waiting for preview testnet tokens from the captcha-gated faucet |
+| On-chain deploy | ⏳ pending — no deployment receipt yet: the Preview deployer wallet holds testnet funds, the Preprod wallet is still awaiting tokens from the captcha-gated faucet |
 | Compiler | `compact compile 0.31.1` (language version 0.23) |
 | Toolchain | Node ≥ 24.11, npm ≥ 10 |
 
-### Deployer wallet (public funding address)
+### Deployer wallets (public funding addresses)
 
-The deployment wallet's **unshielded address** is public by design — it is how the wallet receives testnet tokens. Its secret seed is never committed (git-ignored, `deploy/.seeds/`).
+Each network gets its own deployment wallet, persisted as `deploy/.seeds/<network>.seed` (git-ignored, `chmod 600`) and reused on every run so the funds stay with the same wallet. A wallet's **unshielded address** is public by design — it is how the wallet receives testnet tokens. Its secret seed is never committed and never logged.
 
-| | |
-|---|---|
-| Network | Midnight **Preview** testnet |
-| Address | `mn_addr_preview1y3d7d6hw48lmz3qwsae70xff8xmf8866vkzqn6djmhc276kwe95sadpq9q` |
-| Fund via | <https://faucet.preview.midnight.network> (paste the address, solve the captcha) |
-| Coin public key | `f1c3119717aa645930fc6783747d39bbe8583d46c20f1eea13e061e41d3d4c17` |
+| | Midnight **Preview** | Midnight **Preprod** |
+|---|---|---|
+| Address | `mn_addr_preview1y3d7d6hw48lmz3qwsae70xff8xmf8866vkzqn6djmhc276kwe95sadpq9q` | `mn_addr_preprod129lknssx5lclnq8h47q534qqc0klylgsah2zdmsvxx9240u39jcq3kw75n` |
+| Fund via | <https://faucet.preview.midnight.network> | <https://faucet.preprod.midnight.network> |
+| Coin public key | `f1c3119717aa645930fc6783747d39bbe8583d46c20f1eea13e061e41d3d4c17` | `6c2c52a74e9b7d6aea7e3a09464ffd89c569c4902aa57dfc1c1a45e111a5ba81` |
+| Funding status | ✅ funded — 5,000,000,000 raw NIGHT, unspent (tx `b8dbaf35415aea90a199a6044601ebaeee09da6477f741117ef43ac780084929`, block 994300, 2026-09-23 17:20:30 UTC) | ⏳ awaiting tokens — no unshielded transaction history yet |
 
-Once funded, `npm run deploy:preview` picks up automatically and writes the receipt with the live contract address to [`deploy/deployments/`](deploy/deployments/).
+Funding is confirmed on-chain, not by trust: a drip appears as an unshielded NIGHT UTXO owned by the address in the network's indexer, and the deploy script waits for that balance before it proves anything.
+Once funds arrive, `npm run deploy:preview` or `npm run deploy:preprod` picks up automatically and writes the receipt with the live contract address to [`deploy/deployments/`](deploy/deployments/).
 
 ---
 
