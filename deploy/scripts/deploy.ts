@@ -326,18 +326,24 @@ async function registerDustUtxos(
 async function waitForDust(walletProvider: MidnightWalletProvider, timeoutMs: number): Promise<void> {
   const startedAt = Date.now();
   let lastLog = 0;
+  const isComplete = (progress: unknown): boolean =>
+    typeof (progress as { isStrictlyComplete?: unknown } | undefined)?.isStrictlyComplete === 'function'
+      ? ((progress as { isStrictlyComplete: () => boolean }).isStrictlyComplete() as boolean)
+      : false;
   await Rx.firstValueFrom(
     walletProvider.wallet.state().pipe(
-      Rx.map((st) => st.dust.balance(new Date())),
-      Rx.tap((balance) => {
+      Rx.tap((st) => {
         const now = Date.now();
-        if (now - lastLog >= 15_000) {
-          lastLog = now;
-          baseLog.info(
-            `Waiting for spendable DUST… balance=${balance} (${Math.round((now - startedAt) / 1000)}s elapsed)`,
-          );
-        }
+        if (now - lastLog < 15_000) return;
+        lastLog = now;
+        baseLog.info(
+          `Waiting for spendable DUST… balance=${st.dust.balance(new Date())} ` +
+            `dustSynced=${isComplete(st.dust.state.progress)} ` +
+            `unshieldedSynced=${isComplete(st.unshielded.progress)} ` +
+            `(${Math.round((now - startedAt) / 1000)}s elapsed)`,
+        );
       }),
+      Rx.map((st) => st.dust.balance(new Date())),
       Rx.filter((d) => d > 0n),
       Rx.timeout({ each: timeoutMs, with: () => Rx.throwError(() => new Error('wait-for-dust timeout')) }),
     ),
