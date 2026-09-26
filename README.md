@@ -38,6 +38,16 @@ Each network gets its own deployment wallet, persisted as `deploy/.seeds/<networ
 Funding is confirmed on-chain, not by trust: a drip appears as an unshielded NIGHT UTXO owned by the address in the network's indexer, and the deploy script waits for that balance before it proves anything.
 Once funds arrive, `npm run deploy:preview` or `npm run deploy:preprod` picks up automatically and writes the receipt with the live contract address to [`deploy/deployments/`](deploy/deployments/).
 
+### Current Preview deployer (awaiting funds)
+
+The seed generated in this checkout derives a **new** Preview wallet, so it holds no NIGHT yet. Fund it at <https://faucet.preview.midnight.network>, then `npm run deploy:preview` completes automatically (the seed is reused on every run, so the funds stay with this wallet):
+
+```
+mn_addr_preview1mmvsuev5xzyxapu7q8d3nnh9vqt2srqtl42gl433chphju06hukqtfj0vw
+```
+
+On a memory-constrained machine, prefix the deploy with `NODE_OPTIONS=--max-old-space-size=8192` (see [Troubleshooting](#troubleshooting)).
+
 ---
 
 ## Repository layout
