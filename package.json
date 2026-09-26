@@ -29,7 +29,8 @@
     "poll:tally": "npm run interact --workspace @whisperpoll/deploy -- tally",
     "audit": "bash scripts/audit.sh",
     "evidence": "bash scripts/capture_evidence.sh",
-    "evidence:deploy": "bash scripts/deploy_evidence.sh"
+    "evidence:deploy": "bash scripts/deploy_evidence.sh",
+    "post-deploy": "bash scripts/post_deploy.sh"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

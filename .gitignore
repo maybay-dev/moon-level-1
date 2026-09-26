@@ -9,7 +9,8 @@ dist/
 .env
 .env.*
 !.env.example
-deploy/.seeds/
+deploy/.seeds/*
+!deploy/.seeds/.gitkeep
 *.seed
 *.mnemonic
 deployments/*.local.json

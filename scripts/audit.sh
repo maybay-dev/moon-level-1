@@ -89,7 +89,7 @@ done
 
 head "6. Secrets hygiene"
 if [ -f .env ] && ! git check-ignore -q .env; then bad ".env would be committed"; else ok ".env ignored (or absent)"; fi
-if git ls-files | grep -qE '\.seeds/|\.seed$|DEPLOY_SEED'; then bad "seed material tracked in git"; else ok "no seed files tracked"; fi
+if git ls-files | grep -vE '(^|/)\.gitkeep$' | grep -qE '\.seeds/|\.seed$|DEPLOY_SEED'; then bad "seed material tracked in git"; else ok "no seed files tracked (placeholders only)"; fi
 SEEDVULNS=0
 for SEEDFILE in deploy/.seeds/*.seed; do
   [ -f "$SEEDFILE" ] || continue
