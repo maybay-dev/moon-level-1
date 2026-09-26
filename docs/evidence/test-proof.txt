@@ -1,62 +1,62 @@
 ================================================================================
 WHISPERPOLL — TEST SUITE PROOF (LIVE)
-Captured: 2026-09-23 10:27 UTC · Host: Linux 6.8.0-1064-azure x86_64
+Captured: 2026-09-26 06:06 UTC · Host: Linux 6.8.0-1064-azure x86_64
 The suite drives the REAL compiled circuits in contract/src/managed/whisper-poll
 — no mocks, no re-implementations.
 ================================================================================
 
 $ npm test
-  ✓ test/whisper-poll.test.ts > constructor / initial state > starts in PENDING with zeroed public state 70ms
-  ✓ test/whisper-poll.test.ts > constructor / initial state > stores the secret key as private state (witness round-trip) 27ms
-  ✓ test/whisper-poll.test.ts > constructor / initial state > initializes deterministically for the same key 104ms
-  ✓ test/whisper-poll.test.ts > openPoll > opens a poll and binds the opener as admin 53ms
-  ✓ test/whisper-poll.test.ts > openPoll > accepts the minimum option count (2) 47ms
-  ✓ test/whisper-poll.test.ts > openPoll > accepts the maximum option count (4) 55ms
-  ✓ test/whisper-poll.test.ts > openPoll > rejects one option 56ms
-  ✓ test/whisper-poll.test.ts > openPoll > rejects five options 60ms
-  ✓ test/whisper-poll.test.ts > openPoll > rejects zero options 33ms
-  ✓ test/whisper-poll.test.ts > openPoll > rejects re-opening an already-initialized contract 45ms
-  ✓ test/whisper-poll.test.ts > openPoll > cannot be re-opened even by a different user 47ms
-  ✓ test/whisper-poll.test.ts > vote > records a ballot and increments the tally and total 69ms
-  ✓ test/whisper-poll.test.ts > vote > accepts every valid option index in range 195ms
-  ✓ test/whisper-poll.test.ts > vote > rejects an out-of-range option (== optionCount) 26ms
-  ✓ test/whisper-poll.test.ts > vote > rejects a far out-of-range option 41ms
-  ✓ test/whisper-poll.test.ts > vote > rejects double voting by the same voter 36ms
-  ✓ test/whisper-poll.test.ts > vote > rejects double voting even with the same option 35ms
-  ✓ test/whisper-poll.test.ts > vote > rejects voting while the poll is PENDING 17ms
-  ✓ test/whisper-poll.test.ts > vote > rejects voting after the poll is CLOSED 84ms
-  ✓ test/whisper-poll.test.ts > vote > keeps tallies and totalVotes untouched after a rejected vote 71ms
-  ✓ test/whisper-poll.test.ts > vote > distinguishes voters by pseudonym, not by key bytes 117ms
-  ✓ test/whisper-poll.test.ts > changeVote > moves the ballot and updates tallies atomically 71ms
-  ✓ test/whisper-poll.test.ts > changeVote > changing to the same option is a no-op for tallies 53ms
-  ✓ test/whisper-poll.test.ts > changeVote > handles the full transition matrix without tally drift 98ms
-  ✓ test/whisper-poll.test.ts > changeVote > keeps totalVotes constant across many voters changing votes 97ms
-  ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote when none was cast 25ms
-  ✓ test/whisper-poll.test.ts > changeVote > rejects an out-of-range new option 42ms
-  ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote after close 39ms
-  ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote before the poll opens 18ms
-  ✓ test/whisper-poll.test.ts > closePoll / permissions > admin can close and the state is terminal 28ms
-  ✓ test/whisper-poll.test.ts > closePoll / permissions > a non-admin cannot close the poll 27ms
-  ✓ test/whisper-poll.test.ts > closePoll / permissions > a non-admin cannot close even after voting 36ms
-  ✓ test/whisper-poll.test.ts > closePoll / permissions > rejects closing a PENDING poll 17ms
-  ✓ test/whisper-poll.test.ts > closePoll / permissions > rejects closing an already CLOSED poll 26ms
-  ✓ test/whisper-poll.test.ts > closePoll / permissions > closing is irreversible — no circuit can reopen 28ms
-  ✓ test/whisper-poll.test.ts > pure circuits (commitments) > voterPseudonym is deterministic and key-specific 15ms
-  ✓ test/whisper-poll.test.ts > pure circuits (commitments) > adminCommitment differs from voterPseudonym (domain separation) 15ms
-  ✓ test/whisper-poll.test.ts > pure circuits (commitments) > storing the admin commitment does not reveal the secret key 22ms
-  ✓ test/whisper-poll.test.ts > security scenarios > ballot is bound to the pseudonym — another key cannot alter it 63ms
-  ✓ test/whisper-poll.test.ts > security scenarios > tally integrity: sum of tallies always equals totalVotes 75ms
-  ✓ test/whisper-poll.test.ts > security scenarios > state machine refuses every illegal transition 33ms
-  ✓ test/whisper-poll.test.ts > security scenarios > two voters with colliding fill-bytes keys are still distinct 36ms
+  ✓ test/whisper-poll.test.ts > constructor / initial state > starts in PENDING with zeroed public state 80ms
+  ✓ test/whisper-poll.test.ts > constructor / initial state > stores the secret key as private state (witness round-trip) 28ms
+  ✓ test/whisper-poll.test.ts > constructor / initial state > initializes deterministically for the same key 89ms
+  ✓ test/whisper-poll.test.ts > openPoll > opens a poll and binds the opener as admin 30ms
+  ✓ test/whisper-poll.test.ts > openPoll > accepts the minimum option count (2) 23ms
+  ✓ test/whisper-poll.test.ts > openPoll > accepts the maximum option count (4) 25ms
+  ✓ test/whisper-poll.test.ts > openPoll > rejects one option 21ms
+  ✓ test/whisper-poll.test.ts > openPoll > rejects five options 19ms
+  ✓ test/whisper-poll.test.ts > openPoll > rejects zero options 15ms
+  ✓ test/whisper-poll.test.ts > openPoll > rejects re-opening an already-initialized contract 26ms
+  ✓ test/whisper-poll.test.ts > openPoll > cannot be re-opened even by a different user 34ms
+  ✓ test/whisper-poll.test.ts > vote > records a ballot and increments the tally and total 40ms
+  ✓ test/whisper-poll.test.ts > vote > accepts every valid option index in range 168ms
+  ✓ test/whisper-poll.test.ts > vote > rejects an out-of-range option (== optionCount) 27ms
+  ✓ test/whisper-poll.test.ts > vote > rejects a far out-of-range option 52ms
+  ✓ test/whisper-poll.test.ts > vote > rejects double voting by the same voter 38ms
+  ✓ test/whisper-poll.test.ts > vote > rejects double voting even with the same option 34ms
+  ✓ test/whisper-poll.test.ts > vote > rejects voting while the poll is PENDING 18ms
+  ✓ test/whisper-poll.test.ts > vote > rejects voting after the poll is CLOSED 49ms
+  ✓ test/whisper-poll.test.ts > vote > keeps tallies and totalVotes untouched after a rejected vote 44ms
+  ✓ test/whisper-poll.test.ts > vote > distinguishes voters by pseudonym, not by key bytes 49ms
+  ✓ test/whisper-poll.test.ts > changeVote > moves the ballot and updates tallies atomically 49ms
+  ✓ test/whisper-poll.test.ts > changeVote > changing to the same option is a no-op for tallies 63ms
+  ✓ test/whisper-poll.test.ts > changeVote > handles the full transition matrix without tally drift 140ms
+  ✓ test/whisper-poll.test.ts > changeVote > keeps totalVotes constant across many voters changing votes 131ms
+  ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote when none was cast 28ms
+  ✓ test/whisper-poll.test.ts > changeVote > rejects an out-of-range new option 40ms
+  ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote after close 42ms
+  ✓ test/whisper-poll.test.ts > changeVote > rejects changing a vote before the poll opens 15ms
+  ✓ test/whisper-poll.test.ts > closePoll / permissions > admin can close and the state is terminal 25ms
+  ✓ test/whisper-poll.test.ts > closePoll / permissions > a non-admin cannot close the poll 37ms
+  ✓ test/whisper-poll.test.ts > closePoll / permissions > a non-admin cannot close even after voting 52ms
+  ✓ test/whisper-poll.test.ts > closePoll / permissions > rejects closing a PENDING poll 13ms
+  ✓ test/whisper-poll.test.ts > closePoll / permissions > rejects closing an already CLOSED poll 28ms
+  ✓ test/whisper-poll.test.ts > closePoll / permissions > closing is irreversible — no circuit can reopen 34ms
+  ✓ test/whisper-poll.test.ts > pure circuits (commitments) > voterPseudonym is deterministic and key-specific 13ms
+  ✓ test/whisper-poll.test.ts > pure circuits (commitments) > adminCommitment differs from voterPseudonym (domain separation) 18ms
+  ✓ test/whisper-poll.test.ts > pure circuits (commitments) > storing the admin commitment does not reveal the secret key 27ms
+  ✓ test/whisper-poll.test.ts > security scenarios > ballot is bound to the pseudonym — another key cannot alter it 44ms
+  ✓ test/whisper-poll.test.ts > security scenarios > tally integrity: sum of tallies always equals totalVotes 82ms
+  ✓ test/whisper-poll.test.ts > security scenarios > state machine refuses every illegal transition 37ms
+  ✓ test/whisper-poll.test.ts > security scenarios > two voters with colliding fill-bytes keys are still distinct 33ms
   ✓ test/whisper-poll.test.ts > security scenarios > witness secret key never leaks into public ledger state 35ms
-  ✓ test/whisper-poll.test.ts > edge cases > empty-title poll is accepted 24ms
-  ✓ test/whisper-poll.test.ts > edge cases > unicode title round-trips through the circuit 23ms
-  ✓ test/whisper-poll.test.ts > edge cases > long title (128 chars) round-trips 26ms
-  ✓ test/whisper-poll.test.ts > edge cases > maximum Uint<8> option in a 4-option poll is rejected 22ms
-  ✓ test/whisper-poll.test.ts > edge cases > fresh simulator instances are isolated 45ms
+  ✓ test/whisper-poll.test.ts > edge cases > empty-title poll is accepted 19ms
+  ✓ test/whisper-poll.test.ts > edge cases > unicode title round-trips through the circuit 19ms
+  ✓ test/whisper-poll.test.ts > edge cases > long title (128 chars) round-trips 21ms
+  ✓ test/whisper-poll.test.ts > edge cases > maximum Uint<8> option in a 4-option poll is rejected 31ms
+  ✓ test/whisper-poll.test.ts > edge cases > fresh simulator instances are isolated 37ms
   Test Files  1 passed (1)
        Tests  48 passed (48)
-    Start at  10:28:06
+    Start at  06:06:22
 
 exit code: 0
 ================================================================================
