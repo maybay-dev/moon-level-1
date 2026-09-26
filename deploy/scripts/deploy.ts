@@ -315,11 +315,29 @@ async function registerDustUtxos(
   }
 }
 
-/** Wait until spendable DUST exists (fee resource). */
+/**
+ * Wait until spendable DUST exists (fee resource).
+ *
+ * DUST is generated from registered NIGHT over time, so this can take a few
+ * minutes on a public testnet. Progress is logged periodically (throttled) so a
+ * slow accrual is distinguishable from a stalled wallet — the state stream is
+ * otherwise silent and a hang looks identical to normal waiting.
+ */
 async function waitForDust(walletProvider: MidnightWalletProvider, timeoutMs: number): Promise<void> {
+  const startedAt = Date.now();
+  let lastLog = 0;
   await Rx.firstValueFrom(
     walletProvider.wallet.state().pipe(
       Rx.map((st) => st.dust.balance(new Date())),
+      Rx.tap((balance) => {
+        const now = Date.now();
+        if (now - lastLog >= 15_000) {
+          lastLog = now;
+          baseLog.info(
+            `Waiting for spendable DUST… balance=${balance} (${Math.round((now - startedAt) / 1000)}s elapsed)`,
+          );
+        }
+      }),
       Rx.filter((d) => d > 0n),
       Rx.timeout({ each: timeoutMs, with: () => Rx.throwError(() => new Error('wait-for-dust timeout')) }),
     ),
